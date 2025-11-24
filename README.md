@@ -1,0 +1,873 @@
+[index.html](https://github.com/user-attachments/files/23725105/index.html)
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>Balap Kuis Trivia</title>
+    <style>
+        /* --- PENYESUAIAN KHUSUS UNTUK LAYAR SENTUH (Anti-Geser/Zoom) --- */
+        body {
+            /* Mencegah default action browser seperti zoom/pinch */
+            touch-action: manipulation; 
+            /* Mencegah teks terpilih (seleksi) */
+            user-select: none; 
+            -webkit-user-select: none; 
+            -moz-user-select: none; 
+            -ms-user-select: none; 
+
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #f0f0f0;
+            padding: 0;
+            margin: 0;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow-y: hidden; 
+            overflow-x: hidden; 
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* --- OVERLAY HITUNG MUNDUR DRAMATIS --- */
+        #fullscreen-countdown-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: black;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999; 
+            opacity: 1;
+            transition: opacity 0.3s;
+        }
+        
+        #countdown {
+            font-size: 15vw; 
+            color: white;
+            font-weight: bold;
+            line-height: 1;
+            margin: 0;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+        
+        /* --- LOBBY, WINNER, DAN GAME SCREEN --- */
+        #lobby-screen, #winner-screen {
+            padding: 50px;
+            background-color: #fff;
+            border-radius: 15px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            max-width: 900px;
+            margin: 0 auto;
+            position: relative; 
+        }
+
+        /* TOMBOL FULLSCREEN */
+        #fullscreen-button {
+            position: fixed; 
+            top: 10px;
+            right: 10px;
+            padding: 10px 15px;
+            font-size: 1em;
+            background-color: #ff9800;
+            border: none;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            z-index: 1000;
+        }
+
+        #start-button {
+            padding: 15px 30px;
+            font-size: 1.5em;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        /* Container utama game agar terpusat */
+        #game-screen {
+            width: 98%; 
+            max-width: 1600px; 
+            padding: 10px 0;
+        }
+
+        /* --- Arena Balapan --- */
+        #race-track {
+            display: flex;
+            flex-direction: column; 
+            align-items: flex-start;
+            padding: 10px;
+            border: 5px solid #333;
+            background-color: #6c5; 
+            position: relative;
+            width: 100%;
+            height: 250px; 
+            margin: 10px auto;
+            border-radius: 10px;
+            overflow: hidden; 
+        }
+
+        /* --- STYLING BOLA LINGKARAN (6 PEMAIN) --- */
+        .player-robot {
+            width: 30px;
+            height: 30px;
+            margin: 5px 0;
+            border-radius: 50%; /* LINGKARAN */
+            border: 2px solid #000;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.3);
+            transition: transform 0.3s ease-out; 
+            position: absolute;
+            left: 0; 
+            z-index: 10;
+
+            /* Untuk menempatkan mata dan mulut di dalamnya */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+
+        /* Styling untuk mata */
+        .player-robot .eyes {
+            position: absolute;
+            top: 8px; /* Sesuaikan posisi vertikal */
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 2px; /* Jarak antar mata */
+        }
+
+        .player-robot .eye {
+            width: 4px;
+            height: 4px;
+            background-color: black;
+            border-radius: 50%;
+        }
+
+        /* Styling untuk senyum */
+        .player-robot .mouth {
+            position: absolute;
+            bottom: 5px; /* Sesuaikan posisi vertikal */
+            width: 15px; /* Lebar senyum */
+            height: 8px; /* Tinggi lengkungan senyum */
+            border-radius: 0 0 15px 15px; /* Melengkung di bagian bawah */
+            border-bottom: 2px solid black;
+            border-left: 2px solid black;
+            border-right: 2px solid black;
+            transform: rotate(0deg); /* Agar melengkung ke atas */
+            overflow: hidden; /* Sembunyikan bagian atas border */
+        }
+        
+        /* * POSISI ROBOT SIMETRIS (250px / 6 jalur = ~41.67px per jalur) */
+        #robot-1 { top: 21px; background-color: pink; } 
+        #robot-2 { top: 62px; background-color: blue; }
+        #robot-3 { top: 104px; background-color: green; }
+        #robot-4 { top: 146px; background-color: yellow; }
+        #robot-5 { top: 187px; background-color: purple; }
+        #robot-6 { top: 229px; background-color: orange; }
+        
+        /* GARIS PEMBATAS TELAH DIHAPUS */
+
+        #finish-line {
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 30px;
+            background: repeating-linear-gradient(45deg, #333, #333 10px, #fff 10px, #fff 20px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+            border-left: 5px solid #333;
+            z-index: 1;
+        }
+
+        /* --- Area Kuis dan Jawaban --- */
+        #question-area {
+            width: 100%; 
+            margin: 10px auto;
+            padding: 10px;
+            background-color: #fff;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        #question-text {
+            font-size: 1.5em;
+            color: #333;
+            min-height: 40px;
+        }
+
+        /* CONTAINER KEYPAD UTAMA (SEJAJAR HORIZONTAL) */
+        #quiz-area-container {
+            display: flex; 
+            flex-wrap: nowrap; 
+            gap: 10px;
+            width: 100%;
+            padding: 10px 0;
+            overflow-x: auto; 
+            justify-content: center; 
+        }
+
+        .player-quiz-area {
+            flex: 1 1 150px; 
+            min-width: 150px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            background-color: #fff;
+            box-sizing: border-box;
+        }
+        
+        .player-quiz-area h3 {
+            margin-top: 0;
+            font-size: 1.2em;
+        }
+
+        /* OPSI JAWABAN (SUSUNAN VERTIKAL) */
+        .answer-keypads {
+            display: flex;
+            flex-direction: column; 
+            gap: 5px;
+        }
+
+        .answer-button {
+            padding: 10px 5px; 
+            font-size: 1em;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            color: white; 
+            transition: background-color 0.3s;
+            height: 50px;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            overflow: hidden;
+            text-align: left; 
+            padding-left: 10px;
+        }
+        
+        /* --- KUSTOMISASI WARNA KEYPAD BERDASARKAN PEMAIN (6 PEMAIN) --- */
+        .answer-keypads[data-player-id="1"] .answer-button { background-color: pink; color: black; } 
+        .answer-keypads[data-player-id="2"] .answer-button { background-color: blue; }
+        .answer-keypads[data-player-id="3"] .answer-button { background-color: green; }
+        .answer-keypads[data-player-id="4"] .answer-button { background-color: yellow; color: black; }
+        .answer-keypads[data-player-id="5"] .answer-button { background-color: purple; }
+        .answer-keypads[data-player-id="6"] .answer-button { background-color: orange; }
+
+        /* Efek Tombol Benar (sedikit lebih gelap dari warna pemain) */
+        .answer-keypads[data-player-id="1"] .answer-button.correct { background-color: deeppink !important; color: white !important; } 
+        .answer-keypads[data-player-id="2"] .answer-button.correct { background-color: darkblue !important; }
+        .answer-keypads[data-player-id="3"] .answer-button.correct { background-color: darkgreen !important; }
+        .answer-keypads[data-player-id="4"] .answer-button.correct { background-color: gold !important; color: black !important; }
+        .answer-keypads[data-player-id="5"] .answer-button.correct { background-color: darkmagenta !important; }
+        .answer-keypads[data-player-id="6"] .answer-button.correct { background-color: darkorange !important; }
+
+
+        /* Efek Tombol Salah & Shake (Universal Merah) */
+        .answer-button.wrong {
+            background-color: red !important; 
+            color: white !important;
+            pointer-events: none;
+            animation: shake 0.5s;
+        }
+
+        @keyframes shake {
+            0%, 100% {transform: translateX(0);}
+            20%, 60% {transform: translateX(-3px);}
+            40%, 80% {transform: translateX(3px);}
+        }
+    </style>
+</head>
+<body>
+
+    <button id="fullscreen-button">Aktifkan Fullscreen</button>
+
+    <div id="fullscreen-countdown-overlay" class="hidden">
+        <p id="countdown"></p>
+    </div>
+
+    <div id="lobby-screen">
+        <h1>Balap Kuis Trivia 😊 (6 Pemain)</h1>
+        <p id="loading-status">Memuat soal...</p>
+        
+        <button id="start-button" disabled>Start</button>
+        
+        <div id="social-media" style="margin-top: 30px; border-top: 1px solid #ddd; padding-top: 20px;">
+            <p style="font-size: 1.1em; font-weight: bold; margin-bottom: 10px;">Follow Creator</p>
+            
+            <a href="https://facebook.com/ayuelmasari" target="_blank" style="text-decoration: none; margin: 0 10px;">
+                <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/b/b8/2021_Facebook_icon.svg/512px-2021_Facebook_icon.svg.png" 
+                     alt="Facebook" style="width: 30px; height: 30px; vertical-align: middle;">
+                <span style="vertical-align: middle; color: #3b5998; font-weight: bold;">ayu elma sari</span>
+            </a>
+            
+            <a href="https://instagram.com/aes_435" target="_blank" style="text-decoration: none; margin: 0 10px;">
+                <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e7/Instagram_logo_2016.svg/512px-Instagram_logo_2016.svg.png" 
+                     alt="Instagram" style="width: 30px; height: 30px; vertical-align: middle;">
+                <span style="vertical-align: middle; color: #c32aa3; font-weight: bold;">aes_435</span>
+            </a>
+            
+            <a href="https://tiktok.com/@aes435_" target="_blank" style="text-decoration: none; margin: 0 10px;">
+                <img src="https://upload.wikimedia.org/wikipedia/commons/a/a6/Tiktok_icon.svg" 
+                     alt="TikTok" style="width: 30px; height: 30px; vertical-align: middle;">
+                <span style="vertical-align: middle; color: #000; font-weight: bold;">aes435_</span>
+            </a>
+        </div>
+    </div>
+
+    <div id="game-screen" class="hidden">
+        
+        <div id="race-track">
+            <div class="player-robot" id="robot-1">
+                <div class="eyes"><div class="eye"></div><div class="eye"></div></div>
+                <div class="mouth"></div>
+            </div>
+            <div class="player-robot" id="robot-2">
+                <div class="eyes"><div class="eye"></div><div class="eye"></div></div>
+                <div class="mouth"></div>
+            </div>
+            <div class="player-robot" id="robot-3">
+                <div class="eyes"><div class="eye"></div><div class="eye"></div></div>
+                <div class="mouth"></div>
+            </div>
+            <div class="player-robot" id="robot-4">
+                <div class="eyes"><div class="eye"></div><div class="eye"></div></div>
+                <div class="mouth"></div>
+            </div>
+            <div class="player-robot" id="robot-5">
+                <div class="eyes"><div class="eye"></div><div class="eye"></div></div>
+                <div class="mouth"></div>
+            </div>
+            <div class="player-robot" id="robot-6">
+                <div class="eyes"><div class="eye"></div><div class="eye"></div></div>
+                <div class="mouth"></div>
+            </div>
+            
+            <div id="finish-line">Finish Line</div>
+        </div>
+        
+        <div id="question-area">
+            <h2 id="question-text">Soal akan muncul di sini...</h2>
+        </div>
+
+        <div id="quiz-area-container">
+            <div class="player-quiz-area">
+                <h3 style="color: deeppink;">Player 1</h3>
+                <div class="answer-keypads" data-player-id="1">
+                    <button class="answer-button" data-key="A"></button>
+                    <button class="answer-button" data-key="B"></button>
+                    <button class="answer-button" data-key="C"></button>
+                    <button class="answer-button" data-key="D"></button>
+                </div>
+            </div>
+            
+            <div class="player-quiz-area">
+                <h3 style="color: blue;">Player 2</h3>
+                <div class="answer-keypads" data-player-id="2">
+                    <button class="answer-button" data-key="A"></button>
+                    <button class="answer-button" data-key="B"></button>
+                    <button class="answer-button" data-key="C"></button>
+                    <button class="answer-button" data-key="D"></button>
+                </div>
+            </div>
+            
+            <div class="player-quiz-area">
+                <h3 style="color: green;">Player 3</h3>
+                <div class="answer-keypads" data-player-id="3">
+                    <button class="answer-button" data-key="A"></button>
+                    <button class="answer-button" data-key="B"></button>
+                    <button class="answer-button" data-key="C"></button>
+                    <button class="answer-button" data-key="D"></button>
+                </div>
+            </div>
+            
+            <div class="player-quiz-area">
+                <h3 style="color: orange;">Player 4</h3>
+                <div class="answer-keypads" data-player-id="4">
+                    <button class="answer-button" data-key="A"></button>
+                    <button class="answer-button" data-key="B"></button>
+                    <button class="answer-button" data-key="C"></button>
+                    <button class="answer-button" data-key="D"></button>
+                </div>
+            </div>
+
+            <div class="player-quiz-area">
+                <h3 style="color: purple;">Player 5</h3>
+                <div class="answer-keypads" data-player-id="5">
+                    <button class="answer-button" data-key="A"></button>
+                    <button class="answer-button" data-key="B"></button>
+                    <button class="answer-button" data-key="C"></button>
+                    <button class="answer-button" data-key="D"></button>
+                </div>
+            </div>
+
+            <div class="player-quiz-area">
+                <h3 style="color: brown;">Player 6</h3>
+                <div class="answer-keypads" data-player-id="6">
+                    <button class="answer-button" data-key="A"></button>
+                    <button class="answer-button" data-key="B"></button>
+                    <button class="answer-button" data-key="C"></button>
+                    <button class="answer-button" data-key="D"></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="winner-screen" class="hidden">
+        <h1 id="winner-message"></h1>
+        <button onClick="window.location.reload();">Play Again</button>
+    </div>
+
+    <script>
+        // --- 50 SOAL ANTONIM & SINONIM BAWAAN (FALLBACK) ---
+        const QUESTIONS_DEFAULT = [
+            // ANTONIM (25 SOAL)
+            { question: "Antonim dari **'Naik'**?", options: ["Melompat", "Turun", "Terbang", "Mendaki"], answer: "Turun" },
+            { question: "Lawan kata dari **'Awal'**?", options: ["Mula", "Tengah", "Akhir", "Baru"], answer: "Akhir" },
+            { question: "Antonim dari **'Hidup'**?", options: ["Bernapas", "Mati", "Lari", "Tumbuh"], answer: "Mati" },
+            { question: "Lawan kata dari **'Senang'**?", options: ["Gembira", "Marah", "Sedih", "Ceria"], answer: "Sedih" },
+            { question: "Antonim dari **'Besar'**?", options: ["Luas", "Kecil", "Tinggi", "Pendek"], answer: "Kecil" },
+            { question: "Lawan kata dari **'Masuk'**?", options: ["Keluar", "Tinggal", "Duduk", "Berdiri"], answer: "Keluar" },
+            { question: "Antonim dari **'Cepat'**?", options: ["Lancar", "Lambat", "Kilat", "Terburu"], answer: "Lambat" },
+            { question: "Lawan kata dari **'Terang'**?", options: ["Jelas", "Gelap", "Redup", "Cahaya"], answer: "Gelap" },
+            { question: "Antonim dari **'Banyak'**?", options: ["Semua", "Sedikit", "Sejumlah", "Penuh"], answer: "Sedikit" },
+            { question: "Lawan kata dari **'Maju'**?", options: ["Mundur", "Jalan", "Lompat", "Berangkat"], answer: "Mundur" },
+            { question: "Antonim dari **'Kuat'**?", options: ["Hebat", "Lemah", "Keras", "Baja"], answer: "Lemah" },
+            { question: "Lawan kata dari **'Lama'**?", options: ["Kuno", "Cepat", "Baru", "Sebentar"], answer: "Baru" },
+            { question: "Antonim dari **'Jauh'**?", options: ["Dekat", "Jalan", "Luas", "Pergi"], answer: "Dekat" },
+            { question: "Lawan kata dari **'Suka'**?", options: ["Cinta", "Benci", "Senang", "Mau"], answer: "Benci" },
+            { question: "Antonim dari **'Duduk'**?", options: ["Tiduran", "Jongkok", "Berdiri", "Rebahan"], answer: "Berdiri" },
+            { question: "Lawan kata dari **'Panas'**?", options: ["Hangat", "Dingin", "Mendidih", "Api"], answer: "Dingin" },
+            { question: "Antonim dari **'Tidur'**?", options: ["Mimpi", "Lelah", "Bangun", "Nyenyak"], answer: "Bangun" },
+            { question: "Lawan kata dari **'Untung'**?", options: ["Rugi", "Rezeki", "Laba", "Hasil"], answer: "Rugi" },
+            { question: "Antonim dari **'Tinggi'**?", options: ["Atas", "Jauh", "Pendek", "Langit"], answer: "Pendek" },
+            { question: "Lawan kata dari **'Terima'**?", options: ["Kasih", "Ambil", "Tolak", "Beri"], answer: "Tolak" },
+            { question: "Antonim dari **'Asli'**?", options: ["Tiru", "Tulen", "Palsu", "Sejati"], answer: "Palsu" },
+            { question: "Lawan kata dari **'Positif'**?", options: ["Jelas", "Optimis", "Negatif", "Baik"], answer: "Negatif" },
+            { question: "Antonim dari **'Aktif'**?", options: ["Sibuk", "Giat", "Pasif", "Gerak"], answer: "Pasif" },
+            { question: "Lawan kata dari **'Tebal'**?", options: ["Padat", "Kuat", "Tipis", "Besar"], answer: "Tipis" },
+            { question: "Antonim dari **'Setuju'**?", options: ["Sepakat", "Ragu", "Menolak", "Terima"], answer: "Menolak" },
+
+            // SINONIM (25 SOAL)
+            { question: "Sinonim dari **'Bohong'**?", options: ["Jujur", "Dusta", "Benar", "Bicara"], answer: "Dusta" },
+            { question: "Persamaan kata dari **'Indah'**?", options: ["Jelek", "Cantik", "Buruk", "Tua"], answer: "Cantik" },
+            { question: "Sinonim dari **'Melihat'**?", options: ["Mendengar", "Menatap", "Mencium", "Meraba"], answer: "Menatap" },
+            { question: "Persamaan kata dari **'Pintar'**?", options: ["Bodoh", "Lengah", "Cerdik", "Malas"], answer: "Cerdik" },
+            { question: "Sinonim dari **'Bahagia'**?", options: ["Sedih", "Duka", "Gembira", "Kecil"], answer: "Gembira" },
+            { question: "Persamaan kata dari **'Akal'**?", options: ["Nafsu", "Pikiran", "Hati", "Lisan"], answer: "Pikiran" },
+            { question: "Sinonim dari **'Hutan'**?", options: ["Kota", "Gunung", "Rimaba", "Lembah"], answer: "Rimaba" },
+            { question: "Persamaan kata dari **'Dampak'**?", options: ["Proses", "Akibat", "Sebab", "Maksud"], answer: "Akibat" },
+            { question: "Sinonim dari **'Lelah'**?", options: ["Sehat", "Capek", "Semangat", "Kuasa"], answer: "Capek" },
+            { question: "Persamaan kata dari **'Korupsi'**?", options: ["Jujur", "Curang", "Suci", "Bakti"], answer: "Curang" },
+            { question: "Sinonim dari **'Niscaya'**?", options: ["Boleh", "Mungkin", "Pasti", "Kadang"], answer: "Pasti" },
+            { question: "Persamaan kata dari **'Wajah'**?", options: ["Bahu", "Punggung", "Muka", "Tangan"], answer: "Muka" },
+            { question: "Sinonim dari **'Dunia'**?", options: ["Angkasa", "Bumi", "Planet", "Akhirat"], answer: "Bumi" },
+            { question: "Persamaan kata dari **'Cemas'**?", options: ["Tenang", "Gelisah", "Santai", "Damai"], answer: "Gelisah" },
+            { question: "Sinonim dari **'Sejarah'**?", options: ["Masa Depan", "Riwayat", "Fiksi", "Gosip"], answer: "Riwayat" },
+            { question: "Persamaan kata dari **'Izin'**?", options: ["Larangan", "Perintah", "Boleh", "Permisi"], answer: "Permisi" },
+            { question: "Sinonim dari **'Luar Biasa'**?", options: ["Biasa", "Wajar", "Menakjubkan", "Umum"], answer: "Menakjubkan" },
+            { question: "Persamaan kata dari **'Relasi'**?", options: ["Musuh", "Hubungan", "Jarak", "Sama"], answer: "Hubungan" },
+            { question: "Sinonim dari **'Pahlawan'**?", options: ["Penjahat", "Korban", "Jagoan", "Rakyat"], answer: "Jagoan" },
+            { question: "Persamaan kata dari **'Objektif'**?", options: ["Subjektif", "Netral", "Berat Sebelah", "Emosional"], answer: "Netral" },
+            { question: "Sinonim dari **'Abadi'**?", options: ["Fana", "Sementara", "Kekal", "Awal"], answer: "Kekal" },
+            { question: "Persamaan kata dari **'Fokus'**?", options: ["Bubar", "Pusat", "Tepi", "Menyebar"], answer: "Pusat" },
+            { question: "Sinonim dari **'Klaim'**?", options: ["Tanya", "Jawab", "Tuntutan", "Kasih"], answer: "Tuntutan" },
+            { question: "Persamaan kata dari **'Iterasi'**?", options: ["Akhir", "Pengulangan", "Tuntas", "Henti"], answer: "Pengulangan" },
+            { question: "Sinonim dari **'Kontras'**?", options: ["Sama", "Seimbang", "Perbedaan", "Setara"], answer: "Perbedaan" }
+        ];
+
+        // ----------------------------------------------------------------------
+        // KONFIGURASI GOOGLE SHEETS (MODIFIKASI UNTUK MENDUKUNG PARAMETER URL ?id=)
+        // ----------------------------------------------------------------------
+        
+        // 1. Ambil parameter dari URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const sheetIdFromUrl = urlParams.get('id'); // Mencari nilai dari ?id=
+
+        // 2. Tentukan ID Sheet yang akan digunakan (ID yang ada di kode sebagai default)
+        // * Ganti ID di bawah ini dengan ID Sheet default Anda jika tidak ada ?id= di URL
+        let SHEET_ID = 'YOUR_GOOGLE_SHEET_ID'; 
+
+        // 3. Jika ?id= ditemukan di URL, gunakan nilainya
+        if (sheetIdFromUrl) {
+            SHEET_ID = sheetIdFromUrl.trim(); 
+        }
+
+        // Nama tab sheet pertama. GID=0 untuk tab pertama.
+        const GID = '0'; 
+
+        // --- DATA SOAL AKTIF ---
+        let QUESTIONS = []; 
+
+        // --- KONFIGURASI GAME (TIDAK BERUBAH) ---
+        const TOTAL_PLAYERS = 6; 
+        const STEPS_TO_WIN = 7; // Tetap 7 langkah untuk menang
+        const WIN_ANIMATION_DELAY_MS = 500; 
+        const PENALTY_TIME_MS = 3000; 
+
+        // --- STATE GAME ---
+        let currentQuestionIndex = 0;
+        let playerSteps = Array(TOTAL_PLAYERS).fill(0); 
+        let questionOrder = []; 
+        let isGameActive = false;
+        let playerReadyToAnswer = Array(TOTAL_PLAYERS).fill(true); 
+
+        // --- DOM ELEMENTS ---
+        const lobbyScreen = document.getElementById('lobby-screen');
+        const gameScreen = document.getElementById('game-screen');
+        const winnerScreen = document.getElementById('winner-screen');
+        const startButton = document.getElementById('start-button');
+        const countdownOverlay = document.getElementById('fullscreen-countdown-overlay');
+        const countdownElement = document.getElementById('countdown');
+        const questionTextElement = document.getElementById('question-text');
+        const allKeypads = document.querySelectorAll('.answer-keypads'); 
+        const robotElements = Array.from({ length: TOTAL_PLAYERS }, (_, i) => document.getElementById(`robot-${i + 1}`));
+        const fullscreenButton = document.getElementById('fullscreen-button');
+        const loadingStatusElement = document.getElementById('loading-status');
+        const raceTrack = document.getElementById('race-track');
+
+        // ----------------------------------------------------------------------
+        // FUNGSI MEMUAT SOAL DARI GOOGLE SHEETS
+        // ----------------------------------------------------------------------
+        async function loadQuestions() {
+            startButton.disabled = true;
+            loadingStatusElement.textContent = "Memuat soal kustom..."; 
+
+            const isConfigured = SHEET_ID !== 'YOUR_GOOGLE_SHEET_ID';
+
+            if (isConfigured) {
+                // Link dibuat menggunakan SHEET_ID yang diambil dari URL atau default
+                const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=${GID}`; 
+                
+                try {
+                    const response = await fetch(url);
+                    
+                    if (!response.ok) {
+                        throw new Error(`Gagal memuat data (Status: ${response.status}). Pastikan Sheet dipublikasikan ke web (File > Share > Publish to web).`);
+                    }
+                    
+                    const csvText = await response.text();
+                    
+                    // Parsing CSV: Memisahkan baris dan kolom. 
+                    const rows = csvText.split('\n').filter(row => row.trim() !== '');
+                    
+                    // Abaikan baris header (index 0)
+                    QUESTIONS = rows.slice(1).map(row => {
+                        let columns = row.split(','); 
+                        
+                        columns = columns.map(col => col.trim().replace(/^"|"$/g, ''));
+                        
+                        if (columns.length < 6) return null; 
+                        
+                        return {
+                            question: columns[0],
+                            options: [columns[1], columns[2], columns[3], columns[4]],
+                            answer: columns[5]
+                        };
+                    }).filter(q => q !== null && q.question);
+
+                    if (QUESTIONS.length > 0) {
+                        loadingStatusElement.textContent = `Berhasil memuat ${QUESTIONS.length} soal.`;
+                        startButton.disabled = false;
+                        startButton.textContent = "Start";
+                        return; 
+                    }
+                } catch (error) {
+                    console.error("Error loading Sheets data:", error);
+                    loadingStatusElement.textContent = `Error: ${error.message}. Menggunakan soal bawaan.`;
+                }
+            } else {
+                loadingStatusElement.textContent = "ID Sheet belum diatur. Menggunakan soal bawaan (Antonim/Sinonim)...";
+            }
+            
+            // --- FALLBACK KE SOAL BAWAAN ---
+            QUESTIONS = QUESTIONS_DEFAULT;
+            if (QUESTIONS.length > 0) {
+                startButton.disabled = false;
+                startButton.textContent = "Start";
+            }
+        }
+        
+        // ----------------------------------------------------------------------
+        // FUNGSI GAME LAINNYA
+        // ----------------------------------------------------------------------
+
+        function toggleFullscreen() {
+            const doc = document.documentElement;
+            if (document.fullscreenElement) {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
+            } else {
+                if (doc.requestFullscreen) {
+                    doc.requestFullscreen();
+                } else if (doc.mozRequestFullScreen) {
+                    doc.mozRequestFullScreen();
+                } else if (doc.webkitRequestFullscreen) {
+                    doc.webkitRequestFullscreen();
+                } else if (doc.msRequestFullscreen) {
+                    doc.msRequestFullscreen();
+                }
+            }
+        }
+        
+        // FUNGSI UNTUK MENGACAK URUTAN SOAL
+        function shuffleQuestions() {
+            questionOrder = Array.from(QUESTIONS.keys());
+            for (let i = questionOrder.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [questionOrder[i], questionOrder[j]] = [questionOrder[j], questionOrder[i]];
+            }
+            currentQuestionIndex = 0;
+        }
+
+        // FUNGSI BANTU UNTUK MEMPERBARUI TAMPILAN SOAL DAN KEYPAD
+        function updateKeypadsAndQuestionText(questionData) {
+            questionTextElement.textContent = `${questionData.question}`;
+            allKeypads.forEach(keypad => {
+                const playerId = parseInt(keypad.getAttribute('data-player-id'));
+                const playerIdx = playerId - 1;
+
+                keypad.querySelectorAll('.answer-button').forEach((button, index) => {
+                    button.textContent = questionData.options[index];
+                    button.classList.remove('wrong', 'correct');
+                    // Aktifkan tombol HANYA jika pemain tidak dalam penalti
+                    button.disabled = !playerReadyToAnswer[playerIdx]; 
+                });
+            });
+        }
+        
+        // FUNGSI MENAMPILKAN SOAL (LOGIKA DAUR ULANG INSTAN TANPA PESAN)
+        function displayQuestion() {
+            if (currentQuestionIndex >= questionOrder.length) {
+                // Jika soal habis, acak ulang dan tampilkan soal pertama yang baru
+                shuffleQuestions(); 
+                
+                const questionData = QUESTIONS[questionOrder[currentQuestionIndex]];
+                updateKeypadsAndQuestionText(questionData); 
+                
+                return;
+            }
+
+            // LOGIKA NORMAL: Tampilkan soal saat ini
+            const questionData = QUESTIONS[questionOrder[currentQuestionIndex]];
+            updateKeypadsAndQuestionText(questionData);
+        }
+        
+        function moveRobot(playerId) {
+            const playerIdx = playerId - 1; 
+            playerSteps[playerIdx]++;
+
+            // Hitung posisi horizontal
+            const trackWidth = raceTrack.clientWidth - 30; // Kurangi lebar robot (30px)
+            const stepFraction = trackWidth / STEPS_TO_WIN;
+            const newPosition = playerSteps[playerIdx] * stepFraction;
+
+            robotElements[playerIdx].style.transform = `translateX(${newPosition}px)`;
+
+            // --- LOGIKA KEMENANGAN INSTAN + DELAY 500ms ---
+            if (playerSteps[playerIdx] >= STEPS_TO_WIN) {
+                document.querySelectorAll('.answer-button').forEach(btn => btn.disabled = true);
+                
+                setTimeout(() => {
+                    endGame(playerId);
+                }, WIN_ANIMATION_DELAY_MS); 
+                return true;
+            }
+            return false;
+        }
+
+        function advanceQuestion() {
+             // Nonaktifkan SEMUA tombol, menunggu soal baru
+            document.querySelectorAll('.answer-button').forEach(btn => btn.disabled = true);
+            currentQuestionIndex++;
+            
+            setTimeout(() => {
+                // Reset status siap jawab dan tampilkan soal berikutnya
+                playerReadyToAnswer.fill(true);
+                displayQuestion(); 
+            }, 1000); // Jeda 1 detik sebelum soal baru muncul
+        }
+
+        function handleAnswer(playerId, answerText, clickedButton) {
+            if (!isGameActive || QUESTIONS.length === 0) return;
+            const playerIdx = playerId - 1;
+
+            if (!playerReadyToAnswer[playerIdx]) return; 
+
+            const questionData = QUESTIONS[questionOrder[currentQuestionIndex]];
+            const correctAnswer = questionData.answer; 
+
+            const playerKeypad = document.querySelector(`.answer-keypads[data-player-id="${playerId}"]`);
+            const playerButtons = playerKeypad.querySelectorAll('.answer-button');
+            
+            // Nonaktifkan semua tombol keypad pemain ini
+            playerButtons.forEach(btn => btn.disabled = true); 
+
+            if (answerText === correctAnswer) {
+                clickedButton.classList.add('correct');
+                const won = moveRobot(playerId);
+                
+                if (!won) {
+                    // SOAL HANYA MAJU JIKA JAWABAN BENAR
+                    advanceQuestion(); 
+                }
+                
+            } else {
+                // JAWABAN SALAH (Soal tetap sama, hanya pemain ini yang kena penalti)
+                playerReadyToAnswer[playerIdx] = false;
+                clickedButton.classList.add('wrong');
+                
+                // Penalti: Player ini terkunci selama 3 detik
+                setTimeout(() => {
+                    clickedButton.classList.remove('wrong');
+                    playerReadyToAnswer[playerIdx] = true;
+                    
+                    // KOREKSI: Aktifkan kembali SEMUA tombol pemain ini 
+                    // agar bisa mencoba lagi, selama game masih aktif.
+                    if (isGameActive) {
+                       playerButtons.forEach(btn => {
+                           btn.disabled = false; // AKTIFKAN KEMBALI
+                       });
+                    }
+                }, PENALTY_TIME_MS);
+                
+                // TIDAK ADA advanceQuestion() DI SINI
+            }
+        }
+
+        function startGame() {
+            if (QUESTIONS.length === 0) {
+                alert("Soal belum dimuat. Mohon tunggu atau cek error.");
+                return;
+            }
+            lobbyScreen.classList.add('hidden');
+            fullscreenButton.classList.add('hidden'); 
+            
+            gameScreen.classList.remove('hidden');
+            isGameActive = true;
+            shuffleQuestions(); 
+            displayQuestion();
+        }
+
+        function startCountdown() {
+            startButton.disabled = true;
+            fullscreenButton.disabled = true; 
+            
+            countdownOverlay.classList.remove('hidden');
+            
+            let count = 3;
+            countdownElement.textContent = count;
+
+            const interval = setInterval(() => {
+                count--;
+                if (count >= 0) {
+                    countdownElement.textContent = count === 0 ? "GO!" : count;
+                } else {
+                    clearInterval(interval);
+                    
+                    countdownOverlay.classList.add('hidden');
+                    
+                    startGame();
+                }
+            }, 1000);
+        }
+
+        function endGame(winnerId) {
+            isGameActive = false;
+            gameScreen.classList.add('hidden');
+            winnerScreen.classList.remove('hidden');
+            
+            let winnerColor;
+            switch(winnerId) {
+                case 1: winnerColor = "deeppink"; break; 
+                case 2: winnerColor = "blue"; break;
+                case 3: winnerColor = "green"; break;
+                case 4: winnerColor = "yellow"; break;
+                case 5: winnerColor = "purple"; break;
+                case 6: winnerColor = "orange"; break;
+                default: winnerColor = "black";
+            }
+
+            const finalWinnerColor = winnerColor;
+            
+            // Perubahan: Hapus nama warna, hanya tampilkan ID Pemain
+            document.getElementById('winner-message').innerHTML = `
+                <span style="color: ${finalWinnerColor}; font-size: 2em; font-weight: bold;">
+                    SELAMAT! PLAYER ${winnerId}
+                </span>
+                <br>ADALAH PEMENANGNYA! 🎉
+            `;
+        }
+
+        // ----------------------------------------------------------------------
+        // INISIALISASI
+        // ----------------------------------------------------------------------
+
+        // Event Listener Tombol
+        startButton.addEventListener('click', startCountdown);
+        fullscreenButton.addEventListener('click', toggleFullscreen);
+
+        // Event Listener Keypad
+        allKeypads.forEach(keypad => {
+            const playerId = parseInt(keypad.getAttribute('data-player-id'));
+            
+            keypad.querySelectorAll('.answer-button').forEach(button => {
+                button.addEventListener('click', () => {
+                    if (!isGameActive) return;
+
+                    const answerText = button.textContent;
+                    
+                    handleAnswer(playerId, answerText, button);
+                });
+            });
+        });
+
+        // --- PENCEGAHAN ISU LAYAR SENTUH ---
+        document.addEventListener('contextmenu', (e) => {
+            // Mencegah klik kanan/tekan lama (context menu)
+            e.preventDefault();
+        });
+
+        document.addEventListener('dragstart', (e) => {
+            // Mencegah elemen diseret
+            e.preventDefault();
+        });
+
+        // Mencegah sentuhan default pada layar sentuh secara global
+        document.body.addEventListener('touchstart', (e) => {
+            if (e.touches && e.touches.length > 1) {
+                // Mencegah multi-touch gesture (seperti pinch-to-zoom)
+                e.preventDefault();
+            }
+        }, { passive: false });
+        // -----------------------------------
+        
+        loadQuestions(); 
+    </script>
+</body>
+</html>
